@@ -13,7 +13,7 @@ import numpy as np
 import config
 
 matplotlib.use('WXAgg')
-engine = create_engine(config.uri_keys)
+engine = create_engine(config.uri)
 
 class personalFinance(wx.Frame):
     def __init__(self):
@@ -38,7 +38,7 @@ class personalFinance(wx.Frame):
         # choices = list(engine.execute("""SELECT name
         #                           FROM accounts"""))
         # choices = [choice[0] for choice in choices]
-        # choices = []
+        choices = []
         choices.append('All')
         choices.append('Bank of America')
         choices.append('Cash')
@@ -136,12 +136,12 @@ class personalFinance(wx.Frame):
 
     def createCharts(self):
         self.figure = plt.figure()
-        self.figure.tight_layout()
         self.canvas = FigureCanvas(self.panel,-1,self.figure)
         self.chartSizer.Add(self.canvas,1,10)
-        self.ax1 = self.figure.add_subplot(131)
-        self.ax2 = self.figure.add_subplot(132)
-        self.ax3 = self.figure.add_subplot(133)
+        self.ax1 = plt.subplot2grid((1,4),(0,0))
+        self.ax2 = plt.subplot2grid((1,4),(0,1),colspan=2)
+        self.ax2.set_xlim(left=0,right=10)
+        self.ax3 = plt.subplot2grid((1,4),(0,3))
         self.updateCharts()
 
     def lineChart(self):
@@ -167,7 +167,8 @@ class personalFinance(wx.Frame):
         df = df[['Notes','Amount']].unstack()
         df.drop('Notes',axis=1,inplace=True)
         df.fillna(value=0,axis=0,inplace=True)
-        df.plot(kind='bar',stacked=True,ax=self.ax3,legend=False,rot=45)
+        df.plot(kind='bar',stacked=True,ax=self.ax3,rot=35,color=['salmon','olive'],title='Expense/Revenue')
+        self.ax3.legend(['Expense','Revenue'])
 
     def updateCharts(self):
         self.figure.set_canvas(self.canvas)

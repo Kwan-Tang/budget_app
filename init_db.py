@@ -7,7 +7,7 @@ import config
 
 Base = declarative_base()
 meta= MetaData()
-engine = create_engine(config.uri_keys)
+engine = create_engine(config.uri)
 Session = sessionmaker(bind=engine)
 session = Session()
 
@@ -23,6 +23,7 @@ class Categories(Base):
     __table_args__={"extend_existing":True}
     id = Column(Integer,primary_key=True)
     name = Column(String(50),nullable=False)
+    type = Column(String(50),nullable=False)
 
 class Transactions(Base):
     __tablename__ ='transactions'
@@ -46,13 +47,22 @@ def add_accounts():
 
 def add_categories():
     session.query(Categories).delete()
-    expense_categories = ["Credit Card Payment","Transfer","Groceries","Shopping","Utilities","Food & Dining"
-                          ,"Doctor","Mortgage & Rent","Cash & ATM","Gas & Fuel","Income","Travel","Entertainment"]
-    engine.execute(Categories.__table__.insert(),[dict(name=expense_category) for expense_category in expense_categories])
+    # expense_categories = ["Credit Card Payment","Transfer","Groceries","Shopping","Utilities","Food & Dining"
+    #                       ,"Doctor","Mortgage & Rent","Cash & ATM","Gas & Fuel","Income","Travel","Entertainment"]
+    # engine.execute(Categories.__table__.insert(),[dict(name=expense_category) for expense_category in expense_categories])
+    expense_categories = [{'name':"Credit Card Payment",'type':"Misc"}
+                            ,{'name':"Transfer",'type':"Misc"}
+                            ,{'name':"Groceries",'type':"Expense"}
+                            ,{'name':"Income",'type':"Revenue"}
+                            ,{'name':"Utilities",'type':"Expense"}
+                            ,{'name':"Food and Dining",'type':"Expense"}
+                            ,{'name':"Travel",'type':"Expense"}
+                            ,{'name':"Mortgage and Rent",'type':"Expense"}]
+    engine.execute(Categories.__table__.insert(),expense_categories)
 
 add_accounts()
 add_categories()
 session.commit()
 
-accounts = session.query(Accounts.name).all()
-print(accounts)
+# accounts = session.query(Accounts.name).all()
+print("Success!")
