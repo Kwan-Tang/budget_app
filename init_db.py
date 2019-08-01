@@ -34,35 +34,34 @@ class Transactions(Base):
     original_description = Column(String(250),nullable=False)
     amount = Column(Integer,nullable=False)
     transaction_type = Column(String(50),nullable=False)
-    categories = Column(Integer,ForeignKey('expense_categories.id'))
+    category = Column(Integer,ForeignKey('expense_categories.id'))
     bank = Column(Integer,ForeignKey('accounts.id'))
 
 Base.metadata.create_all(engine)
 
-def add_accounts():
+def add_accounts(bank_accounts):
     session.query(Accounts).delete()
-    bank_accounts = ['Bank of America','Citibank','Chase','Wellsfargo','US Bank','PNC','American Express','Cash']
     status = 'active'
     engine.execute(Accounts.__table__.insert(),[dict(name=bank_account,status=status) for bank_account in bank_accounts])
 
-def add_categories():
+def add_categories(expense_categories):
     session.query(Categories).delete()
-    # expense_categories = ["Credit Card Payment","Transfer","Groceries","Shopping","Utilities","Food & Dining"
-    #                       ,"Doctor","Mortgage & Rent","Cash & ATM","Gas & Fuel","Income","Travel","Entertainment"]
-    # engine.execute(Categories.__table__.insert(),[dict(name=expense_category) for expense_category in expense_categories])
-    expense_categories = [{'name':"Credit Card Payment",'type':"Misc"}
-                            ,{'name':"Transfer",'type':"Misc"}
-                            ,{'name':"Groceries",'type':"Expense"}
-                            ,{'name':"Income",'type':"Revenue"}
-                            ,{'name':"Utilities",'type':"Expense"}
-                            ,{'name':"Food and Dining",'type':"Expense"}
-                            ,{'name':"Travel",'type':"Expense"}
-                            ,{'name':"Mortgage and Rent",'type':"Expense"}]
-    engine.execute(Categories.__table__.insert(),expense_categories)
+    engine.execute(Categories.__table__.insert(),[dict(name=expense_category[0],type=expense_category[1]) for expense_category in [expense_categories]])
 
-add_accounts()
-add_categories()
+def add_transactions(transactions):
+    session.query(Transactions).delete()
+    engine.execute(Transactions.__table__.insert(),[dict(date=transaction[0],
+                                                        description=transaction[1],
+                                                        original_description=transaction[2],
+                                                        amount=transaction[3],
+                                                        transaction_type=transaction[4],
+                                                        category=transaction[5],
+                                                        bank=transaction[6]) for transaction in [transactions]])
+
+add_accounts(['Chase'])
+add_categories(['Income','Revenue'])
+add_transactions(['07/31/2019','Check','Payroll',3000,'credit',1,1])
 session.commit()
-
-# accounts = session.query(Accounts.name).all()
+session.close()
+engine.dispose()
 print("Success!")
