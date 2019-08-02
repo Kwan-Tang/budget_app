@@ -20,8 +20,6 @@ Session = sessionmaker(bind=engine)
 session = Session()
 meta = MetaData(engine,reflect=True)
 Accounts = meta.tables['accounts']
-Categories = meta.tables['expense_categories']
-Transactions = meta.tables['transactions']
 
 class personalFinance(wx.Frame):
     def __init__(self):
@@ -35,11 +33,20 @@ class personalFinance(wx.Frame):
 
     def menuBar(self):
         menuBar = wx.MenuBar()
-        fileButton = wx.Menu()
-        exitItem = wx.MenuItem(fileButton,wx.ID_EXIT,"Quit\tCtrl+Q")
-        fileButton.Append(exitItem)
-        menuBar.Append(fileButton,'File')
+        fileMenu = wx.Menu()
+        newItem = wx.Menu()
+        bank_account = newItem.Append(wx.ID_ANY,"Bank account")
+        category = newItem.Append(wx.ID_ANY,"Category")
+        transaction = newItem.Append(wx.ID_ANY,"Transaction")
+        fileMenu.Append(wx.ID_ANY,"New",newItem)
+        fileMenu.AppendSeparator()
+        exitItem = wx.MenuItem(fileMenu,wx.ID_EXIT,"Quit\tCtrl+Q")
+        fileMenu.Append(exitItem)
+        menuBar.Append(fileMenu,'File')
         self.SetMenuBar(menuBar)
+        self.Bind(wx.EVT_MENU,lambda x:self.Close(),bank_account)
+        self.Bind(wx.EVT_MENU,lambda x:self.Close(),category)
+        self.Bind(wx.EVT_MENU,lambda x:self.Close(),transaction)
         self.Bind(wx.EVT_MENU,lambda x:self.Close(),exitItem)
 
     def accountsListBox(self):
@@ -185,6 +192,42 @@ class personalFinance(wx.Frame):
         self.barChart()
         self.canvas.draw()
 
+class Bank_Accounts(wx.Frame):
+    def __init__(self):
+        wx.Frame.__init__(self,parent=None)
+        self.SetTitle("Add new bank account")
+        self.add_accounts(['BMO'])
+
+        def add_accounts(self,bank_accounts):
+            status = 'active'
+            engine.execute(Accounts.insert(),[dict(name=bank_account,status=status) for bank_account in bank_accounts])
+
+class Categories(wx.Frame):
+    def __init__(self):
+        wx.Frame.__init__(self,parent=None)
+        self.SetTitle("Add new category")
+        self.Categories = meta.tables['expense_categories']
+        self.add_categories(['Wendys','Misc'])
+
+    def add_categories(self,expense_categories):
+        engine.execute(self.Categories.insert(),[dict(name=expense_category[0],type=expense_category[1]) for expense_category in [expense_categories]])
+
+class Transactions(wx.Frame):
+    def __init__(self):
+        wx.Frame.__init__(self,parent=None)
+        self.SetTitle("add transaction")
+        self.Transactions = meta.tables['transactions']
+        self.add_transactions(['07/21/2019','Tips','Restaurant',-15,'debit',1,1])
+
+    def add_transactions(self,transactions):
+        engine.execute(self.Transactions.insert(),[dict(date=transaction[0],
+                                                description=transaction[1],
+                                                original_description=transaction[2],
+                                                amount=transaction[3],
+                                                transaction_type=transaction[4],
+                                                category=transaction[5],
+                                                bank=transaction[6]) for transaction in [transactions]])
+                                                
 def main():
     app = wx.App()
     personalfinance = personalFinance()
@@ -194,29 +237,6 @@ def main():
     session.close()
     engine.dispose()
     plt.show()
-
-class Categories(wx.Frame):
-    def __init__(self):
-        wx.Frame.__init__(self,parent=None)
-        self.SetTitle("Add new category")
-        self.add_accounts(['Bank of America'])
-
-    def add_accounts(self,bank_accounts):
-        status = 'active'
-        engine.execute(Accounts.insert(),[dict(name=bank_account,status=status) for bank_account in bank_accounts])
-
-    def add_categories(self,expense_categories):
-        engine.execute(Categories.insert(),[dict(name=expense_category[0],type=expense_category[1]) for expense_category in [expense_categories]])
-
-    def add_transactions(self,transactions):
-        engine.execute(Transactions.insert(),[dict(date=transaction[0],
-                                                description=transaction[1],
-                                                original_description=transaction[2],
-                                                amount=transaction[3],
-                                                transaction_type=transaction[4],
-                                                category=transaction[5],
-                                                bank=transaction[6]) for transaction in [transactions]])
-
 
 if __name__ =='__main__':
     main()
