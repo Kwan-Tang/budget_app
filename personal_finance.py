@@ -195,8 +195,14 @@ class personalFinance(wx.Frame):
 class Bank_Accounts(wx.Frame):
     def __init__(self):
         wx.Frame.__init__(self,parent=None)
-        self.SetTitle("Add new bank account")
-        self.add_accounts(['BMO'])
+        self.basicGUI()
+
+        def basicGUI(self):
+            account = wx.TextEntryDialog(None,"Please enter a new bank account","Add a new account")
+            if account.ShowModal() == wx.ID_OK:
+                account = account.GetValue()
+                self.add_accounts([account])
+                wx.MessageBox("You have successfully added a new bank account!","Success!",wx.OK | wx.ICON_INFORMATION)
 
         def add_accounts(self,bank_accounts):
             status = 'active'
@@ -205,9 +211,18 @@ class Bank_Accounts(wx.Frame):
 class Categories(wx.Frame):
     def __init__(self):
         wx.Frame.__init__(self,parent=None)
-        self.SetTitle("Add new category")
         self.Categories = meta.tables['expense_categories']
-        self.add_categories(['Wendys','Misc'])
+        self.basicGUI()
+
+    def basicGUI(self):
+        name = wx.TextEntryDialog(None,"Please enter a new category.","Add a new category")
+        if name.ShowModal() == wx.ID_OK:
+            name = name.GetValue()
+        type = wx.TextEntryDialog(None,"Please enter the category type.","Add a category type")
+        if type.ShowModal() == wx.ID_OK:
+            type = type.GetValue()
+        self.add_categories([name,type])
+        wx.MessageBox("You have successfully added a new category!","Success!",wx.OK | wx.ICON_INFORMATION)
 
     def add_categories(self,expense_categories):
         engine.execute(self.Categories.insert(),[dict(name=expense_category[0],type=expense_category[1]) for expense_category in [expense_categories]])
@@ -219,6 +234,7 @@ class Transactions(wx.Frame):
         self.Transactions = meta.tables['transactions']
         self.add_transactions(['07/21/2019','Tips','Restaurant',-15,'debit',1,1])
 
+
     def add_transactions(self,transactions):
         engine.execute(self.Transactions.insert(),[dict(date=transaction[0],
                                                 description=transaction[1],
@@ -227,7 +243,6 @@ class Transactions(wx.Frame):
                                                 transaction_type=transaction[4],
                                                 category=transaction[5],
                                                 bank=transaction[6]) for transaction in [transactions]])
-                                                
 def main():
     app = wx.App()
     personalfinance = personalFinance()
