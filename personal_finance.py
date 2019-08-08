@@ -1,4 +1,5 @@
 import wx
+import wx.adv
 from sqlalchemy import create_engine
 import pandas as pd
 from datetime import datetime
@@ -227,13 +228,74 @@ class Categories(wx.Frame):
     def add_categories(self,expense_categories):
         engine.execute(self.Categories.insert(),[dict(name=expense_category[0],type=expense_category[1]) for expense_category in [expense_categories]])
 
-class Transactions(wx.Frame):
+class Transactions(wx.Dialog):
     def __init__(self):
-        wx.Frame.__init__(self,parent=None)
-        self.SetTitle("add transaction")
-        self.Transactions = meta.tables['transactions']
-        self.add_transactions(['07/21/2019','Tips','Restaurant',-15,'debit',1,1])
+        wx.Dialog.__init__(self,parent=None)
+        self.SetTitle("Add a transaction")
+        self.basicGUI()
 
+    def basicGUI(self):
+        self.mainSizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.leftSizer = wx.BoxSizer(wx.VERTICAL)
+        self.rightSizer = wx.BoxSizer(wx.VERTICAL)
+        self.mainSizer.Add(self.leftSizer,1,wx.ALL|wx.EXPAND)
+        self.mainSizer.Add(self.rightSizer,1,wx.ALL)
+        self.dateSizer()
+        self.bankSizer()
+        self.catSizer()
+        self.descriptionSizer()
+        self.amountSizer()
+        self.buttonSizer()
+        self.SetSizer(self.mainSizer)
+
+    def dateSizer(self):
+        box = wx.BoxSizer(wx.HORIZONTAL)
+        locale = wx.Locale(wx.LANGUAGE_ENGLISH_US)
+        date = wx.StaticText(self,label="Date: ",size=(65,18))
+        self.date = wx.adv.GenericDatePickerCtrl(self,wx.ID_ANY,wx.DefaultDateTime)
+##        self.date = wx.TextCtrl(self,wx.ID_ANY,size=(200,23))
+        box.Add(date,0,wx.ALL,5)
+        box.Add(self.date,0,wx.ALL,5)
+        self.leftSizer.Add(box,1)
+
+    def bankSizer(self):
+        box = wx.BoxSizer(wx.HORIZONTAL)
+        bank = wx.StaticText(self,label="Bank Account: ",size=(65,18))
+        self.bank = wx.TextCtrl(self,wx.ID_ANY,size=(200,23))
+        box.Add(bank,0,wx.ALL,5)
+        box.Add(self.bank,0,wx.ALL,5)
+        self.leftSizer.Add(box,1)
+
+    def catSizer(self):
+        box = wx.BoxSizer(wx.HORIZONTAL)
+        category = wx.StaticText(self,label="Category: ",size=(65,18))
+        self.category = wx.TextCtrl(self,wx.ID_ANY,size=(200,23))
+        box.Add(category,0,wx.ALL,5)
+        box.Add(self.category ,0,wx.ALL,5)
+        self.leftSizer.Add(box,1)
+
+    def descriptionSizer(self):
+        box = wx.BoxSizer(wx.HORIZONTAL)
+        description = wx.StaticText(self,label="Description: ",size=(65,18))
+        desc = wx.TextCtrl(self,wx.ID_ANY,size=(200,23))
+        box.Add(description,0,wx.ALL,5)
+        box.Add(desc,1,wx.ALL,5)
+        self.leftSizer.Add(box,1)
+
+    def amountSizer(self):
+        box = wx.BoxSizer(wx.HORIZONTAL)
+        amount = wx.StaticText(self,label="Amount: ",size=(65,18))
+        self.amount = wx.TextCtrl(self,wx.ID_ANY,size=(200,23))
+        box.Add(amount,0,wx.ALL,5)
+        box.Add(self.amount,0,wx.ALL,5)
+        self.leftSizer.Add(box,1)
+
+    def buttonSizer(self):
+        save = wx.Button(self,label="Save")
+        cxl = wx.Button(self,label="Cancel")
+        self.rightSizer.Add(save,0,wx.ALL,5)
+        self.rightSizer.Add(cxl,0,wx.ALL,5)
+        cxl.Bind(wx.EVT_BUTTON,lambda x:self.Close())
 
     def add_transactions(self,transactions):
         engine.execute(self.Transactions.insert(),[dict(date=transaction[0],
@@ -243,6 +305,7 @@ class Transactions(wx.Frame):
                                                 transaction_type=transaction[4],
                                                 category=transaction[5],
                                                 bank=transaction[6]) for transaction in [transactions]])
+
 def main():
     app = wx.App()
     personalfinance = personalFinance()
