@@ -45,10 +45,10 @@ class personalFinance(wx.Frame):
         fileMenu.Append(exitItem)
         menuBar.Append(fileMenu,'File')
         self.SetMenuBar(menuBar)
-        self.Bind(wx.EVT_MENU,lambda x:self.Close(),bank_account)
-        self.Bind(wx.EVT_MENU,lambda x:self.Close(),category)
-        self.Bind(wx.EVT_MENU,lambda x:self.Close(),transaction)
-        self.Bind(wx.EVT_MENU,lambda x:self.Close(),exitItem)
+        self.Bind(wx.EVT_MENU,lambda x:self.Destroy(),bank_account)
+        self.Bind(wx.EVT_MENU,lambda x:self.Destroy(),category)
+        self.Bind(wx.EVT_MENU,lambda x:self.Destroy(),transaction)
+        self.Bind(wx.EVT_MENU,lambda x:self.Destroy(),exitItem)
 
     def accountsListBox(self):
         # choices = list(engine.execute("""SELECT name
@@ -252,16 +252,16 @@ class Transactions(wx.Dialog):
         box = wx.BoxSizer(wx.HORIZONTAL)
         locale = wx.Locale(wx.LANGUAGE_ENGLISH_US)
         date = wx.StaticText(self,label="Date: ",size=(65,18))
-        self.date = wx.adv.GenericDatePickerCtrl(self,wx.ID_ANY,wx.DefaultDateTime)
-##        self.date = wx.TextCtrl(self,wx.ID_ANY,size=(200,23))
+        self.date = wx.adv.GenericDatePickerCtrl(self,wx.ID_ANY,wx.DefaultDateTime,size=(200,23))
         box.Add(date,0,wx.ALL,5)
         box.Add(self.date,0,wx.ALL,5)
         self.leftSizer.Add(box,1)
 
     def bankSizer(self):
         box = wx.BoxSizer(wx.HORIZONTAL)
+        self.bank_accounts = pd.DataFrame(conn.execute(meta.tables['accounts'].select()).fetchall(),columns=['ID','Name'])
         bank = wx.StaticText(self,label="Bank Account: ",size=(65,18))
-        self.bank = wx.TextCtrl(self,wx.ID_ANY,size=(200,23))
+        self.bank = wx.ComboBox(self,wx.ID_ANY,choices=self.bank_accounts['Name'].tolist(),size=(200,23))
         box.Add(bank,0,wx.ALL,5)
         box.Add(self.bank,0,wx.ALL,5)
         self.leftSizer.Add(box,1)
@@ -269,7 +269,8 @@ class Transactions(wx.Dialog):
     def catSizer(self):
         box = wx.BoxSizer(wx.HORIZONTAL)
         category = wx.StaticText(self,label="Category: ",size=(65,18))
-        self.category = wx.TextCtrl(self,wx.ID_ANY,size=(200,23))
+        self.categories = pd.DataFrame(conn.execute(meta.tables['expense_categories'].select()).fetchall(),columns=['ID','Name'])
+        self.category = wx.ComboBox(self,wx.ID_ANY,choices=self.categories['Name'].tolist(),size=(200,23))
         box.Add(category,0,wx.ALL,5)
         box.Add(self.category ,0,wx.ALL,5)
         self.leftSizer.Add(box,1)
@@ -277,9 +278,9 @@ class Transactions(wx.Dialog):
     def descriptionSizer(self):
         box = wx.BoxSizer(wx.HORIZONTAL)
         description = wx.StaticText(self,label="Description: ",size=(65,18))
-        desc = wx.TextCtrl(self,wx.ID_ANY,size=(200,23))
+        self.desc = wx.TextCtrl(self,wx.ID_ANY,size=(200,23))
         box.Add(description,0,wx.ALL,5)
-        box.Add(desc,1,wx.ALL,5)
+        box.Add(self.desc,1,wx.ALL,5)
         self.leftSizer.Add(box,1)
 
     def amountSizer(self):
@@ -295,16 +296,22 @@ class Transactions(wx.Dialog):
         cxl = wx.Button(self,label="Cancel")
         self.rightSizer.Add(save,0,wx.ALL,5)
         self.rightSizer.Add(cxl,0,wx.ALL,5)
-        cxl.Bind(wx.EVT_BUTTON,lambda x:self.Close())
+        save.Bind(wx.EVT_BUTTON,self.add_transaction)
+        cxl.Bind(wx.EVT_BUTTON,lambda x:self.Destroy())
 
-    def add_transactions(self,transactions):
-        engine.execute(self.Transactions.insert(),[dict(date=transaction[0],
-                                                description=transaction[1],
-                                                original_description=transaction[2],
-                                                amount=transaction[3],
-                                                transaction_type=transaction[4],
-                                                category=transaction[5],
-                                                bank=transaction[6]) for transaction in [transactions]])
+    def add_transaction(self,event):
+        self.Transactions = meta.tables['transactions']
+        bank_index = self.bank_accounts[self.bank_accounts['Name']==self.bank.GetValue()].index
+        bank_id = self.bank_accounts.iloc[bank_index]['ID']
+        cat_index = self.categories[self.categories['Name']==self.category.GetValue()].index
+        cat_id = self.categories.iloc[cat_index]['ID']
+        engine.execute(self.Transactions.insert(),[dict(date=self.date.GetValue().Format("%m-%d-%Y"),
+                                                        description=self.desc.GetValue(),
+                                                        amount=self.amount.GetValue(),
+                                                        category=int(cat_id.values[0]),
+                                                        bank=int(bank_id.values[0]))])
+
+        self.Destroy()
 
 def main():
     app = wx.App()
