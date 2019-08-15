@@ -14,11 +14,14 @@ import numpy as np
 import config
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import MetaData
+import seaborn as sns
 
 matplotlib.use('WXAgg')
+sns.set_style('darkgrid')
 engine = create_engine(config.uri)
 Session = sessionmaker(bind=engine)
 session = Session()
+conn = engine.connect()
 meta = MetaData(engine,reflect=True)
 Accounts = meta.tables['accounts']
 
@@ -29,6 +32,8 @@ class personalFinance(wx.Frame):
         self.menuBar()
         self.panel = wx.Panel(self)
         self.Maximize(True)
+        self.SetFocus()
+        self.Centre()
         self.boxSizers()
         self.createCharts()
 
@@ -45,20 +50,28 @@ class personalFinance(wx.Frame):
         fileMenu.Append(exitItem)
         menuBar.Append(fileMenu,'File')
         self.SetMenuBar(menuBar)
-        self.Bind(wx.EVT_MENU,lambda x:self.Destroy(),bank_account)
-        self.Bind(wx.EVT_MENU,lambda x:self.Destroy(),category)
-        self.Bind(wx.EVT_MENU,lambda x:self.Destroy(),transaction)
+        self.Bind(wx.EVT_MENU,self.addBank,bank_account)
+        self.Bind(wx.EVT_MENU,self.addCategory,category)
+        self.Bind(wx.EVT_MENU,self.addTransaction,transaction)
         self.Bind(wx.EVT_MENU,lambda x:self.Destroy(),exitItem)
 
+    def addBank(self,event):
+        bank = Bank_Accounts()
+        bank.Show()
+
+    def addTransaction(self,event):
+        transactions = Transactions()
+        transactions.Show()
+
+    def addCategory(self,event):
+        categories = Categories()
+        categories.Show()
+
     def accountsListBox(self):
-        # choices = list(engine.execute("""SELECT name
-        #                           FROM accounts"""))
-        # choices = [choice[0] for choice in choices]
-        choices = []
-        choices.append('All')
-        choices.append('Bank of America')
-        choices.append('Cash')
-        choices.append('Chase')
+        choices = pd.read_sql("SELECT name FROM accounts",conn)
+        choices = choices.name.to_list()
+        choices.append("All")
+        choices.sort()
         self.accountslistbox = wx.ListBox(self.panel,id = wx.ID_ANY,choices=choices,style=wx.LB_SORT,pos=wx.DefaultPosition)
         self.accountslistbox.SetSelection(0)
         self.accountslistbox.Bind(wx.EVT_LISTBOX,self.updateValues)
@@ -71,18 +84,20 @@ class personalFinance(wx.Frame):
         timeFrame = {'1M':1,'3M':3,'6M':6,'1Y':12,'5Y':60}
         self.month = timeFrame[self.rb.GetItemLabel(self.rb.GetSelection())]
         date = datetime(datetime.today().year,datetime.today().month,1) - relativedelta(months=int(self.month)-1)
-        self.new_df = self.df[self.df['DateTime'] >=date]
-        if accounts !='All': self.new_df = self.new_df[self.new_df['Account Name']==accounts]
+        self.new_df = self.df[self.df['date'] >=date]
+        if accounts !='All': self.new_df = self.new_df[self.new_df['account_name']==accounts]
         self.new_df.reset_index(inplace=True,drop=True)
+        self.new_df['date'] = self.new_df['date'].dt.date
         val_dict = {0:'Date',1:'Account Name',2:'Category',3:'Description',4:"Amount"}
         for val in val_dict: self.transactionslistctrl.InsertColumn(val,val_dict[val])
         for i,v in self.new_df.iterrows():
-            self.transactionslistctrl.InsertItem(i,v[1])
-            self.transactionslistctrl.SetItem(i,1,v[7])
-            self.transactionslistctrl.SetItem(i,2,v[6])
-            self.transactionslistctrl.SetItem(i,3,v[2][:50])
-            self.transactionslistctrl.SetItem(i,4,str(v[4]))
-        for val in val_dict: self.transactionslistctrl.SetColumnWidth(val,wx.LIST_AUTOSIZE_USEHEADER)
+            if v[0] !="":
+                self.transactionslistctrl.InsertItem(i,str(v[0]))
+                self.transactionslistctrl.SetItem(i,1,str(v[8]))
+                self.transactionslistctrl.SetItem(i,2,str(v[6]))
+                self.transactionslistctrl.SetItem(i,3,str(v[1]))
+                self.transactionslistctrl.SetItem(i,4,'{:,.2f}'.format(v[2]))
+        for val in val_dict: self.transactionslistctrl.SetColumnWidth(val,150)
         self.updateCharts()
         self.updateBalances()
 
@@ -104,8 +119,9 @@ class personalFinance(wx.Frame):
         self.staticbox = wx.StaticBox(self.panel,label="Balances")
         self.bsizer = wx.StaticBoxSizer(self.staticbox,wx.VERTICAL)
         self.Box.Add(self.bsizer,1,wx.ALL|wx.EXPAND,10)
-        sum_df = self.new_df.groupby('Account Name').sum()
-        sum_df = sum_df['Amount']
+        print(self.new_df)
+        sum_df = self.new_df.groupby('account_name').sum()
+        sum_df = sum_df['amount']
         s=""
         for i in range(len(sum_df)):
             s += sum_df.index[i] + "     " +  '{:,.2f}'.format(sum_df[i]) + "\n"
@@ -113,34 +129,61 @@ class personalFinance(wx.Frame):
         self.bsizer.Add(self.stext, 0, wx.TOP|wx.LEFT, 10)
 
     def updateBalances(self):
-        sum_df = self.new_df.groupby('Account Name').sum()
-        sum_df = sum_df['Amount']
+        sum_df = self.new_df.groupby('account_name').sum()
+        sum_df = sum_df['amount']
         s=""
         for i in range(len(sum_df)):
             s += sum_df.index[i] + "     " +  '{:,.2f}'.format(sum_df[i]) + "\n"
         self.stext.SetLabel(s)
 
     def transactionsListCtrl(self):
-        self.df = pd.read_csv('transactions.csv')
-        self.df = self.df[self.df['Labels']!='Misc']
-        # self.df['DateTime']= self.df['Date'].astype('datetime64[ns]')
-        self.df['DateTime'] = pd.to_datetime(self.df['Date'])
-        currentMonth = datetime.now().month
-        self.df.replace({'Transaction Type':{'credit':1,'debit':-1}},inplace=True)
-        self.df['Amount'] = self.df['Amount']*self.df['Transaction Type']
-        self.df.reset_index(inplace=True)
+        # self.df = pd.read_csv('transactions.csv')
+        # self.df = self.df[self.df['Labels']!='Misc']
+        # self.df['DateTime'] = pd.to_datetime(self.df['Date'])
+        # currentMonth = datetime.now().month
+        # self.df.replace({'Transaction Type':{'credit':1,'debit':-1}},inplace=True)
+        # self.df['Amount'] = self.df['Amount']*self.df['Transaction Type']
+        # self.df.reset_index(inplace=True)
+        # self.transactionslistctrl = wx.ListCtrl(self.panel,style=wx.LC_REPORT| wx.LC_ALIGN_LEFT,size=(750,200))
+        # self.new_df = self.df[self.df['DateTime'].dt.month==datetime.now().month]
+        # val_dict = {0:'Date',1:'Account Name',2:'Category',3:'Description',4:"Amount"}
+        # for val in val_dict: self.transactionslistctrl.InsertColumn(val,val_dict[val])
+        # self.new_df.reset_index(inplace=True,drop=True)
+        # for i,v in self.new_df.iterrows():
+        #     self.transactionslistctrl.InsertItem(i,v[1])
+        #     self.transactionslistctrl.SetItem(i,1,v[7])
+        #     self.transactionslistctrl.SetItem(i,2,v[6])
+        #     self.transactionslistctrl.SetItem(i,3,v[2][:50])
+        #     self.transactionslistctrl.SetItem(i,4,str(v[4]))
+        # for val in val_dict: self.transactionslistctrl.SetColumnWidth(val,wx.LIST_AUTOSIZE_USEHEADER)
+        # self.Box.Add(self.transactionslistctrl,1,wx.ALL|wx.EXPAND,10)
+        self.df = pd.read_sql("""SELECT t.date as date
+                                ,t.description as description
+                                ,t.amount as amount
+                                ,t.category as category
+                                ,t.bank as bank
+                                ,ec.id as expense_id
+                                ,ec.name as expense_name
+                                ,a.id as account_id
+                                ,a.name as account_name
+                                FROM transactions t
+                                JOIN expense_categories ec ON ec.id = t.category
+                                JOIN accounts a ON a.ID = t.bank
+                                WHERE ec.name <>'Misc'""",conn)
         self.transactionslistctrl = wx.ListCtrl(self.panel,style=wx.LC_REPORT| wx.LC_ALIGN_LEFT,size=(750,200))
-        self.new_df = self.df[self.df['DateTime'].dt.month==datetime.now().month]
+        self.df['date'] = pd.to_datetime(self.df['date'])
+        self.new_df = self.df[self.df['date'].dt.month==datetime.now().month]
+        self.new_df['date'] = self.new_df['date'].dt.date
         val_dict = {0:'Date',1:'Account Name',2:'Category',3:'Description',4:"Amount"}
         for val in val_dict: self.transactionslistctrl.InsertColumn(val,val_dict[val])
-        self.new_df.reset_index(inplace=True,drop=True)
         for i,v in self.new_df.iterrows():
-            self.transactionslistctrl.InsertItem(i,v[1])
-            self.transactionslistctrl.SetItem(i,1,v[7])
-            self.transactionslistctrl.SetItem(i,2,v[6])
-            self.transactionslistctrl.SetItem(i,3,v[2][:50])
-            self.transactionslistctrl.SetItem(i,4,str(v[4]))
-        for val in val_dict: self.transactionslistctrl.SetColumnWidth(val,wx.LIST_AUTOSIZE_USEHEADER)
+            if v[0] !="":
+                self.transactionslistctrl.InsertItem(i,str(v[0]))
+                self.transactionslistctrl.SetItem(i,1,str(v[8]))
+                self.transactionslistctrl.SetItem(i,2,str(v[6]))
+                self.transactionslistctrl.SetItem(i,3,str(v[1]))
+                self.transactionslistctrl.SetItem(i,4,'{:,.2f}'.format(v[2]))
+        for val in val_dict: self.transactionslistctrl.SetColumnWidth(val,150)
         self.Box.Add(self.transactionslistctrl,1,wx.ALL|wx.EXPAND,10)
 
     def radioButtons(self):
@@ -151,6 +194,7 @@ class personalFinance(wx.Frame):
         self.Box.Add(self.buttonsSizer,1,wx.ALL|wx.EXPAND,10)
 
     def createCharts(self):
+        pass
         self.figure = plt.figure()
         self.canvas = FigureCanvas(self.panel,-1,self.figure)
         self.chartSizer.Add(self.canvas,1,10)
@@ -163,28 +207,30 @@ class personalFinance(wx.Frame):
     def lineChart(self):
         self.ax1.clear()
         df = self.new_df.copy()
-        df['Cumulative'] = df['Amount'].cumsum()
-        df.plot(x='Date',y='Cumulative',ax=self.ax1,rot=30,legend=False,title='Cash Flow')
+        df['Cumulative'] = df['amount'].cumsum()
+        df['date'] = pd.to_datetime(df['date'])
+        df.plot(x='date',y='Cumulative',ax=self.ax1,rot=30,legend=False,title='Cash Flow')
 
     def pieChart(self):
         self.ax2.clear()
         df = self.new_df.copy()
-        df = df[df['Amount']<0]
-        df['Amount'] = df['Amount'].abs()
-        df = df.groupby('Category').sum()
+        df = df[df['amount']<0]
+        df['Amount'] = df['amount'].abs()
+        df = df.groupby('category').sum()
         df.plot(kind='pie',y='Amount',ax=self.ax2,autopct='%1.1f%%',fontsize=6,legend=False,title='Expenses')
         self.ax2.set_ylabel('')
 
     def barChart(self):
         self.ax3.clear()
         df = self.new_df.copy()
+        df['DateTime'] = pd.to_datetime(self.df['date'])
         df.set_index('DateTime',drop=True,inplace=True)
-        df = df.groupby([df.index.year,df.index.month,df.Labels]).sum()
-        df = df[['Notes','Amount']].unstack()
-        df.drop('Notes',axis=1,inplace=True)
+        df = df.groupby([df.index.year,df.index.month,df.category]).sum()
+        df = df['amount'].unstack()
         df.fillna(value=0,axis=0,inplace=True)
-        df.plot(kind='bar',stacked=True,ax=self.ax3,rot=35,color=['salmon','olive'],title='Expense/Revenue')
+        df.plot(kind='bar',stacked=True,ax=self.ax3,rot=35,title='Expense/Revenue')
         self.ax3.legend(['Expense','Revenue'])
+        self.ax3.set_xlabel('')
 
     def updateCharts(self):
         self.figure.set_canvas(self.canvas)
@@ -197,42 +243,47 @@ class Bank_Accounts(wx.Frame):
     def __init__(self):
         wx.Frame.__init__(self,parent=None)
         self.basicGUI()
+        self.SetFocus()
+        self.Centre()
 
-        def basicGUI(self):
-            account = wx.TextEntryDialog(None,"Please enter a new bank account","Add a new account")
-            if account.ShowModal() == wx.ID_OK:
-                account = account.GetValue()
-                self.add_accounts([account])
-                wx.MessageBox("You have successfully added a new bank account!","Success!",wx.OK | wx.ICON_INFORMATION)
+    def basicGUI(self):
+        account = wx.TextEntryDialog(None,"Please enter a new bank account","Add a new account")
+        if account.ShowModal() == wx.ID_OK:
+            account = account.GetValue()
+            self.add_accounts([account])
+            wx.MessageBox("You have successfully added a new bank account!","Success!",wx.OK | wx.ICON_INFORMATION)
+        self.Destroy()
 
-        def add_accounts(self,bank_accounts):
-            status = 'active'
-            engine.execute(Accounts.insert(),[dict(name=bank_account,status=status) for bank_account in bank_accounts])
+    def add_accounts(self,bank_accounts):
+        status = 'active'
+        engine.execute(Accounts.insert(),[dict(name=bank_account,status=status) for bank_account in bank_accounts])
 
 class Categories(wx.Frame):
     def __init__(self):
         wx.Frame.__init__(self,parent=None)
         self.Categories = meta.tables['expense_categories']
         self.basicGUI()
+        self.SetFocus()
+        self.Centre()
 
     def basicGUI(self):
         name = wx.TextEntryDialog(None,"Please enter a new category.","Add a new category")
         if name.ShowModal() == wx.ID_OK:
             name = name.GetValue()
-        type = wx.TextEntryDialog(None,"Please enter the category type.","Add a category type")
-        if type.ShowModal() == wx.ID_OK:
-            type = type.GetValue()
-        self.add_categories([name,type])
+        self.add_categories(name)
         wx.MessageBox("You have successfully added a new category!","Success!",wx.OK | wx.ICON_INFORMATION)
+        self.Destroy()
 
-    def add_categories(self,expense_categories):
-        engine.execute(self.Categories.insert(),[dict(name=expense_category[0],type=expense_category[1]) for expense_category in [expense_categories]])
+    def add_categories(self,name):
+        engine.execute(self.Categories.insert(),[dict(name=name)])
 
 class Transactions(wx.Dialog):
     def __init__(self):
         wx.Dialog.__init__(self,parent=None)
         self.SetTitle("Add a transaction")
         self.basicGUI()
+        self.Centre()
+        self.SetFocus()
 
     def basicGUI(self):
         self.mainSizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -310,7 +361,7 @@ class Transactions(wx.Dialog):
                                                         amount=self.amount.GetValue(),
                                                         category=int(cat_id.values[0]),
                                                         bank=int(bank_id.values[0]))])
-
+        wx.MessageBox("You have successfully added a new transaction!","Success!",wx.OK|wx.ICON_INFORMATION)
         self.Destroy()
 
 def main():
