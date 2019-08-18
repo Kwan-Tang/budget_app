@@ -187,7 +187,6 @@ class personalFinance(wx.Frame):
         self.ax1.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
         self.ax1.xaxis.set_major_locator(plt.MaxNLocator(5))
 
-
     def pieChart(self):
         self.ax2.clear()
         df = self.new_df.copy()
