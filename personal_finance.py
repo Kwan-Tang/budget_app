@@ -23,7 +23,6 @@ Session = sessionmaker(bind=engine)
 session = Session()
 conn = engine.connect()
 meta = MetaData(engine,reflect=True)
-Accounts = meta.tables['accounts']
 
 class personalFinance(wx.Frame):
     def __init__(self):
@@ -346,6 +345,7 @@ def main():
     app.MainLoop()
     session.commit()
     session.close()
+    conn.close()
     engine.dispose()
     plt.show()
 
