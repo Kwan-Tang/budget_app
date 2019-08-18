@@ -34,8 +34,8 @@ class personalFinance(wx.Frame):
         self.Maximize(True)
         self.SetFocus()
         self.Centre()
-        self.boxSizers()
         self.createCharts()
+        self.boxSizers()
 
     def menuBar(self):
         menuBar = wx.MenuBar()
@@ -58,14 +58,17 @@ class personalFinance(wx.Frame):
     def addBank(self,event):
         bank = Bank_Accounts()
         bank.Show()
+        wx.MessageBox("Requires application to start in order for changes to take effect!","Restart Application",wx.OK|wx.ICON_INFORMATION)
 
     def addTransaction(self,event):
         transactions = Transactions()
         transactions.Show()
+        self.updateValues()
 
     def addCategory(self,event):
         categories = Categories()
         categories.Show()
+        self.updateValues()
 
     def accountsListBox(self):
         choices = pd.read_sql("SELECT name FROM accounts",conn)
@@ -78,21 +81,22 @@ class personalFinance(wx.Frame):
         self.Box.Add(self.accountslistbox,0,wx.ALL|wx.EXPAND,10)
 
     def updateValues(self,event):
-        self.transactionslistctrl.DeleteAllItems()
-        self.transactionslistctrl.DeleteAllColumns()
         accounts = self.accountslistbox.GetString(self.accountslistbox.GetSelection())
         timeFrame = {'1M':1,'3M':3,'6M':6,'1Y':12,'5Y':60}
-        self.month = timeFrame[self.rb.GetItemLabel(self.rb.GetSelection())]
-        date = datetime(datetime.today().year,datetime.today().month,1) - relativedelta(months=int(self.month)-1)
-        self.new_df = self.df[self.df['date'] >=date]
-        if accounts !='All': self.new_df = self.new_df[self.new_df['account_name']==accounts]
+        currMonth = timeFrame[self.rb.GetItemLabel(self.rb.GetSelection())]
+        datePrev = datetime(datetime.today().year,datetime.today().month,1) - relativedelta(months=int(currMonth)-1)
+        self.transactionslistctrl.DeleteAllItems()
+        self.transactionslistctrl.DeleteAllColumns()
+        self.downloadData()
+        self.new_df = self.df[self.df['date'] >=datePrev]
+        if accounts !="All": self.new_df = self.new_df[self.new_df['account_name']==accounts]
+        self.new_df['dateString'] = self.new_df['date'].dt.date
         self.new_df.reset_index(inplace=True,drop=True)
-        self.new_df['date'] = self.new_df['date'].dt.date
         val_dict = {0:'Date',1:'Account Name',2:'Category',3:'Description',4:"Amount"}
         for val in val_dict: self.transactionslistctrl.InsertColumn(val,val_dict[val])
         for i,v in self.new_df.iterrows():
             if v[0] !="":
-                self.transactionslistctrl.InsertItem(i,str(v[0]))
+                self.transactionslistctrl.InsertItem(i,str(v[9]))
                 self.transactionslistctrl.SetItem(i,1,str(v[8]))
                 self.transactionslistctrl.SetItem(i,2,str(v[6]))
                 self.transactionslistctrl.SetItem(i,3,str(v[1]))
@@ -104,12 +108,10 @@ class personalFinance(wx.Frame):
     def boxSizers(self):
         mainSizer = wx.BoxSizer(wx.VERTICAL)
         self.Box = wx.BoxSizer(wx.HORIZONTAL)
-        self.chartSizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.accountsListBox()
-        self.transactionsListCtrl()
-        self.balances()
         self.buttonsSizer = wx.BoxSizer(wx.VERTICAL)
+        self.accountsListBox()
         self.radioButtons()
+        self.transactionsListCtrl()
         mainSizer.Add(self.Box,0,wx.ALL|wx.EXPAND,5)
         self.panel.SetSizer(mainSizer)
         mainSizer.Add(self.chartSizer,1,wx.ALL|wx.EXPAND,5)
@@ -119,7 +121,6 @@ class personalFinance(wx.Frame):
         self.staticbox = wx.StaticBox(self.panel,label="Balances")
         self.bsizer = wx.StaticBoxSizer(self.staticbox,wx.VERTICAL)
         self.Box.Add(self.bsizer,1,wx.ALL|wx.EXPAND,10)
-        print(self.new_df)
         sum_df = self.new_df.groupby('account_name').sum()
         sum_df = sum_df['amount']
         s=""
@@ -131,32 +132,21 @@ class personalFinance(wx.Frame):
     def updateBalances(self):
         sum_df = self.new_df.groupby('account_name').sum()
         sum_df = sum_df['amount']
+        self.stext.SetLabel("")
         s=""
         for i in range(len(sum_df)):
             s += sum_df.index[i] + "     " +  '{:,.2f}'.format(sum_df[i]) + "\n"
         self.stext.SetLabel(s)
 
     def transactionsListCtrl(self):
-        # self.df = pd.read_csv('transactions.csv')
-        # self.df = self.df[self.df['Labels']!='Misc']
-        # self.df['DateTime'] = pd.to_datetime(self.df['Date'])
-        # currentMonth = datetime.now().month
-        # self.df.replace({'Transaction Type':{'credit':1,'debit':-1}},inplace=True)
-        # self.df['Amount'] = self.df['Amount']*self.df['Transaction Type']
-        # self.df.reset_index(inplace=True)
-        # self.transactionslistctrl = wx.ListCtrl(self.panel,style=wx.LC_REPORT| wx.LC_ALIGN_LEFT,size=(750,200))
-        # self.new_df = self.df[self.df['DateTime'].dt.month==datetime.now().month]
-        # val_dict = {0:'Date',1:'Account Name',2:'Category',3:'Description',4:"Amount"}
-        # for val in val_dict: self.transactionslistctrl.InsertColumn(val,val_dict[val])
-        # self.new_df.reset_index(inplace=True,drop=True)
-        # for i,v in self.new_df.iterrows():
-        #     self.transactionslistctrl.InsertItem(i,v[1])
-        #     self.transactionslistctrl.SetItem(i,1,v[7])
-        #     self.transactionslistctrl.SetItem(i,2,v[6])
-        #     self.transactionslistctrl.SetItem(i,3,v[2][:50])
-        #     self.transactionslistctrl.SetItem(i,4,str(v[4]))
-        # for val in val_dict: self.transactionslistctrl.SetColumnWidth(val,wx.LIST_AUTOSIZE_USEHEADER)
-        # self.Box.Add(self.transactionslistctrl,1,wx.ALL|wx.EXPAND,10)
+        self.transactionslistctrl = wx.ListCtrl(self.panel,style=wx.LC_REPORT| wx.LC_ALIGN_LEFT,size=(750,200))
+        self.downloadData()
+        self.new_df = self.df[self.df['date'].dt.month==datetime.now().month]
+        self.balances()
+        self.updateValues(wx.EVT_LISTBOX)
+        self.Box.Add(self.transactionslistctrl,1,wx.ALL|wx.EXPAND,10)
+
+    def downloadData(self):
         self.df = pd.read_sql("""SELECT t.date as date
                                 ,t.description as description
                                 ,t.amount as amount
@@ -170,21 +160,6 @@ class personalFinance(wx.Frame):
                                 JOIN expense_categories ec ON ec.id = t.category
                                 JOIN accounts a ON a.ID = t.bank
                                 WHERE ec.name <>'Misc'""",conn)
-        self.transactionslistctrl = wx.ListCtrl(self.panel,style=wx.LC_REPORT| wx.LC_ALIGN_LEFT,size=(750,200))
-        self.df['date'] = pd.to_datetime(self.df['date'])
-        self.new_df = self.df[self.df['date'].dt.month==datetime.now().month]
-        self.new_df['date'] = self.new_df['date'].dt.date
-        val_dict = {0:'Date',1:'Account Name',2:'Category',3:'Description',4:"Amount"}
-        for val in val_dict: self.transactionslistctrl.InsertColumn(val,val_dict[val])
-        for i,v in self.new_df.iterrows():
-            if v[0] !="":
-                self.transactionslistctrl.InsertItem(i,str(v[0]))
-                self.transactionslistctrl.SetItem(i,1,str(v[8]))
-                self.transactionslistctrl.SetItem(i,2,str(v[6]))
-                self.transactionslistctrl.SetItem(i,3,str(v[1]))
-                self.transactionslistctrl.SetItem(i,4,'{:,.2f}'.format(v[2]))
-        for val in val_dict: self.transactionslistctrl.SetColumnWidth(val,150)
-        self.Box.Add(self.transactionslistctrl,1,wx.ALL|wx.EXPAND,10)
 
     def radioButtons(self):
         self.rb = wx.RadioBox(self.panel,wx.ID_ANY,"Time Frame",choices=["1M","3M","6M","1Y","5Y"],style=wx.VERTICAL)
@@ -194,41 +169,42 @@ class personalFinance(wx.Frame):
         self.Box.Add(self.buttonsSizer,1,wx.ALL|wx.EXPAND,10)
 
     def createCharts(self):
-        pass
         self.figure = plt.figure()
+        self.chartSizer = wx.BoxSizer(wx.HORIZONTAL)
         self.canvas = FigureCanvas(self.panel,-1,self.figure)
         self.chartSizer.Add(self.canvas,1,10)
         self.ax1 = plt.subplot2grid((1,4),(0,0))
         self.ax2 = plt.subplot2grid((1,4),(0,1),colspan=2)
         self.ax2.set_xlim(left=0,right=10)
         self.ax3 = plt.subplot2grid((1,4),(0,3))
-        self.updateCharts()
 
     def lineChart(self):
         self.ax1.clear()
         df = self.new_df.copy()
+        df = df.sort_values('date')
         df['Cumulative'] = df['amount'].cumsum()
-        df['date'] = pd.to_datetime(df['date'])
         df.plot(x='date',y='Cumulative',ax=self.ax1,rot=30,legend=False,title='Cash Flow')
+        self.ax1.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
+        self.ax1.xaxis.set_major_locator(plt.MaxNLocator(5))
+
 
     def pieChart(self):
         self.ax2.clear()
         df = self.new_df.copy()
         df = df[df['amount']<0]
         df['Amount'] = df['amount'].abs()
-        df = df.groupby('category').sum()
-        df.plot(kind='pie',y='Amount',ax=self.ax2,autopct='%1.1f%%',fontsize=6,legend=False,title='Expenses')
+        df = df.groupby('description').sum()
+        df.plot(kind='pie',y='Amount',labels=df.index,ax=self.ax2,autopct='%1.1f%%',fontsize=6,legend=False,title='Expenses')
         self.ax2.set_ylabel('')
 
     def barChart(self):
         self.ax3.clear()
         df = self.new_df.copy()
-        df['DateTime'] = pd.to_datetime(self.df['date'])
-        df.set_index('DateTime',drop=True,inplace=True)
+        df.set_index('date',drop=True,inplace=True)
         df = df.groupby([df.index.year,df.index.month,df.category]).sum()
         df = df['amount'].unstack()
         df.fillna(value=0,axis=0,inplace=True)
-        df.plot(kind='bar',stacked=True,ax=self.ax3,rot=35,title='Expense/Revenue')
+        df.plot(kind='bar',stacked=True,ax=self.ax3,rot=35,title='Expense/Revenue',color=['olive','maroon'])
         self.ax3.legend(['Expense','Revenue'])
         self.ax3.set_xlabel('')
 
