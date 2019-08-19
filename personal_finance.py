@@ -14,10 +14,9 @@ import numpy as np
 import config
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import MetaData
-import seaborn as sns
 
 matplotlib.use('WXAgg')
-sns.set_style('darkgrid')
+plt.style.use('ggplot')
 engine = create_engine(config.uri)
 Session = sessionmaker(bind=engine)
 session = Session()
@@ -57,7 +56,6 @@ class personalFinance(wx.Frame):
     def addBank(self,event):
         bank = Bank_Accounts()
         bank.Show()
-        wx.MessageBox("Requires application to start in order for changes to take effect!","Restart Application",wx.OK|wx.ICON_INFORMATION)
 
     def addTransaction(self,event):
         transactions = Transactions()
@@ -158,7 +156,8 @@ class personalFinance(wx.Frame):
                                 FROM transactions t
                                 JOIN expense_categories ec ON ec.id = t.category
                                 JOIN accounts a ON a.ID = t.bank
-                                WHERE ec.name <>'Misc'""",conn)
+                                WHERE ec.name <>'Misc'
+                                ORDER BY t.date DESC""",conn)
 
     def radioButtons(self):
         self.rb = wx.RadioBox(self.panel,wx.ID_ANY,"Time Frame",choices=["1M","3M","6M","1Y","5Y"],style=wx.VERTICAL)
@@ -180,8 +179,9 @@ class personalFinance(wx.Frame):
     def lineChart(self):
         self.ax1.clear()
         df = self.new_df.copy()
-        df = df.sort_values('date')
+        df.sort_values('date',ascending=True,inplace=True)
         df['Cumulative'] = df['amount'].cumsum()
+        print(df)
         df.plot(x='date',y='Cumulative',ax=self.ax1,rot=30,legend=False,title='Cash Flow')
         self.ax1.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
         self.ax1.xaxis.set_major_locator(plt.MaxNLocator(5))
@@ -202,7 +202,7 @@ class personalFinance(wx.Frame):
         df = df.groupby([df.index.year,df.index.month,df.category]).sum()
         df = df['amount'].unstack()
         df.fillna(value=0,axis=0,inplace=True)
-        df.plot(kind='bar',stacked=True,ax=self.ax3,rot=35,title='Expense/Revenue',color=['olive','maroon'])
+        df.plot(kind='bar',stacked=True,ax=self.ax3,rot=35,title='Expense/Revenue')
         self.ax3.legend(['Expense','Revenue'])
         self.ax3.set_xlabel('')
 
@@ -226,6 +226,7 @@ class Bank_Accounts(wx.Frame):
             account = account.GetValue()
             self.add_accounts([account])
             wx.MessageBox("You have successfully added a new bank account!","Success!",wx.OK | wx.ICON_INFORMATION)
+            wx.MessageBox("Requires application to start in order for changes to take effect!","Restart Application",wx.OK|wx.ICON_INFORMATION)
         self.Destroy()
 
     def add_accounts(self,bank_accounts):
