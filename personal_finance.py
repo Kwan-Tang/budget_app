@@ -30,10 +30,10 @@ class personalFinance(wx.Frame):
         self.menuBar()
         self.panel = wx.Panel(self)
         self.Maximize(True)
-        self.SetFocus()
-        self.Centre()
         self.createCharts()
         self.boxSizers()
+        self.SetFocus()
+        self.Centre()
 
     def menuBar(self):
         menuBar = wx.MenuBar()
