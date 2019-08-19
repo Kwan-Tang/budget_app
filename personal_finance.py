@@ -181,7 +181,6 @@ class personalFinance(wx.Frame):
         df = self.new_df.copy()
         df.sort_values('date',ascending=True,inplace=True)
         df['Cumulative'] = df['amount'].cumsum()
-        print(df)
         df.plot(x='date',y='Cumulative',ax=self.ax1,rot=30,legend=False,title='Cash Flow')
         self.ax1.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
         self.ax1.xaxis.set_major_locator(plt.MaxNLocator(5))
