@@ -14,6 +14,7 @@ import numpy as np
 import config
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import MetaData
+import wx.lib.mixins.listctrl as listmix
 
 matplotlib.use('WXAgg')
 plt.style.use('ggplot')
@@ -26,6 +27,7 @@ meta = MetaData(engine,reflect=True)
 class personalFinance(wx.Frame):
     def __init__(self):
         wx.Frame.__init__(self,parent=None)
+        self.locale = wx.Locale(wx.LANGUAGE_ENGLISH_US)
         self.SetTitle('Personal Finance Application')
         self.menuBar()
         self.panel = wx.Panel(self)
@@ -39,10 +41,13 @@ class personalFinance(wx.Frame):
         menuBar = wx.MenuBar()
         fileMenu = wx.Menu()
         newItem = wx.Menu()
+        
         bank_account = newItem.Append(wx.ID_ANY,"Bank account")
         category = newItem.Append(wx.ID_ANY,"Category")
         transaction = newItem.Append(wx.ID_ANY,"Transaction")
         fileMenu.Append(wx.ID_ANY,"New",newItem)
+        editItem = wx.MenuItem(fileMenu,wx.ID_ANY,"Edit\tCtrl+E")
+        fileMenu.Append(editItem)
         fileMenu.AppendSeparator()
         exitItem = wx.MenuItem(fileMenu,wx.ID_EXIT,"Quit\tCtrl+Q")
         fileMenu.Append(exitItem)
@@ -51,21 +56,26 @@ class personalFinance(wx.Frame):
         self.Bind(wx.EVT_MENU,self.addBank,bank_account)
         self.Bind(wx.EVT_MENU,self.addCategory,category)
         self.Bind(wx.EVT_MENU,self.addTransaction,transaction)
+        self.Bind(wx.EVT_MENU,self.editTransaction,editItem)
         self.Bind(wx.EVT_MENU,lambda x:self.Destroy(),exitItem)
 
     def addBank(self,event):
         bank = Bank_Accounts()
         bank.Show()
 
+    def editTransaction(self,event):
+        transactionslookup = TransactionsLookup()
+        transactionslookup.Show()
+
     def addTransaction(self,event):
         transactions = Transactions()
         transactions.Show()
-        self.updateValues()
+        self.updateValues(event)
 
     def addCategory(self,event):
         categories = Categories()
         categories.Show()
-        self.updateValues()
+        self.updateValues(event)
 
     def accountsListBox(self):
         choices = pd.read_sql("SELECT name FROM accounts",conn)
@@ -230,6 +240,7 @@ class Bank_Accounts(wx.Frame):
 
     def add_accounts(self,bank_accounts):
         status = 'active'
+        Accounts = meta.tables['accounts']
         engine.execute(Accounts.insert(),[dict(name=bank_account,status=status) for bank_account in bank_accounts])
 
 class Categories(wx.Frame):
@@ -337,6 +348,185 @@ class Transactions(wx.Dialog):
                                                         bank=int(bank_id.values[0]))])
         wx.MessageBox("You have successfully added a new transaction!","Success!",wx.OK|wx.ICON_INFORMATION)
         self.Destroy()
+
+class TransactionsLookup(wx.Dialog):
+    def __init__(self):
+        wx.Dialog.__init__(self,parent=None,size=(467,350))
+        self.SetTitle('Transaction lookup')
+        self.getData()
+        self.basicGUI()
+        self.bankAccounts()
+        self.datePicker()
+        self.createSearchCtrl()
+        self.createButtons()
+        self.createListCtrl()
+        self.SetFocus()
+        self.Centre()
+
+    def basicGUI(self):
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        topSizer = wx.BoxSizer(wx.HORIZONTAL)
+        bottomSizer = wx.BoxSizer(wx.VERTICAL)
+        self.filterSizer = wx.BoxSizer(wx.VERTICAL)
+        self.buttonSizer = wx.BoxSizer(wx.VERTICAL)
+        self.listSizer=wx.BoxSizer(wx.VERTICAL)
+        topSizer.Add(self.filterSizer,1,wx.ALL|wx.EXPAND,5)
+        topSizer.Add(self.buttonSizer,1,wx.ALL|wx.EXPAND,5)
+        bottomSizer.Add(self.listSizer,1)
+        mainSizer.Add(topSizer,1,wx.ALL|wx.EXPAND)
+        mainSizer.Add(bottomSizer,1,wx.ALL|wx.EXPAND)
+        self.SetSizer(mainSizer,0)
+
+    def getData(self):
+        self.df = pd.read_sql("""SELECT
+                                t.id as transaction_id
+                                ,t.date as date
+                                ,t.description as description
+                                ,t.amount as amount
+                                ,t.category as category
+                                ,t.bank as bank
+                                ,ec.id as expense_id
+                                ,ec.name as expense_name
+                                ,a.id as account_id
+                                ,a.name as account_name
+                                FROM transactions t
+                                JOIN expense_categories ec ON ec.id = t.category
+                                JOIN accounts a ON a.ID = t.bank
+                                WHERE ec.name <>'Misc'
+                                ORDER BY t.date DESC""",conn)
+        self.df['dateString'] = self.df['date'].dt.date
+        
+    def bankAccounts(self):
+        bankaccounts = wx.BoxSizer(wx.HORIZONTAL)
+        accounts = pd.DataFrame(conn.execute(meta.tables['accounts'].select()).fetchall(),columns=['id','name'])
+        bank = wx.StaticText(self,label="Bank",size=(65,19))
+        self.bankCombo = wx.ComboBox(self,wx.ID_ANY,choices=accounts['name'].tolist(),size=(275,23))
+        bankaccounts.Add(bank,0,wx.ALL,1)
+        bankaccounts.Add(self.bankCombo,0,wx.ALL,5)
+        self.filterSizer.Add(bankaccounts,0,wx.ALL,5)
+
+    def createButtons(self):
+        searchButton = wx.Button(self,wx.ID_ANY,label="Search")
+        saveButton = wx.Button(self,wx.ID_ANY,label="Save")
+        clearButton = wx.Button(self,wx.ID_ANY,label="Clear")
+        removeButton = wx.Button(self,wx.ID_ANY,label="Remove")
+        cancelButton = wx.Button(self,wx.ID_ANY,label="Cancel")
+        self.buttonSizer.Add(searchButton,0,wx.ALL,5)
+        self.buttonSizer.Add(saveButton,0,wx.ALL,5)
+        self.buttonSizer.Add(clearButton,0,wx.ALL,5)
+        self.buttonSizer.Add(removeButton,0,wx.ALL,5)
+        self.buttonSizer.Add(cancelButton,0,wx.ALL,5)
+        searchButton.Bind(wx.EVT_BUTTON,self.refreshData)
+        saveButton.Bind(wx.EVT_BUTTON,self.saveData)
+        clearButton.Bind(wx.EVT_BUTTON,self.clearFilters)
+        cancelButton.Bind(wx.EVT_BUTTON,lambda x:self.Destroy())
+        removeButton.Bind(wx.EVT_BUTTON,self.removeData)
+
+    def clearFilters(self,event):
+        self.datepicker.SetValue(wx.DateTime())
+        df = self.df.copy()
+        self.loadData(df)
+        self.search.SetValue("")
+        self.bankCombo.SetValue("")
+
+    def createSearchCtrl(self):
+        self.search = wx.SearchCtrl(self,wx.ID_ANY,size=(340,26))
+        self.search.ShowCancelButton(True)
+        self.filterSizer.Add(self.search,0,wx.ALL|wx.EXPAND,5)
+
+    def createListCtrl(self):
+        self.listCtrl = EditableListCtrl(self,style=wx.LC_REPORT|wx.EXPAND,size=(450,125))
+        self.listCtrl.SetColumnWidth(2,50)
+        self.listCtrl.InsertColumn(0,"ID")
+        self.listCtrl.InsertColumn(1,"Date")
+        self.listCtrl.InsertColumn(2,"Bank")
+        self.listCtrl.InsertColumn(3,"Description")
+        self.listCtrl.InsertColumn(4,"Amount")
+        if self.datepicker.GetValue().IsValid():
+            self.df = self.df[self.df['date']==datetime.strptime(self.datepicker.GetValue().Format("%m-%d-%Y"),"%m-%d-%Y")]
+        self.loadData(self.df)
+        self.listCtrl.SetColumnWidth(0,30)
+        self.listCtrl.SetColumnWidth(1,80)
+        self.listCtrl.SetColumnWidth(2,120)
+        self.listCtrl.SetColumnWidth(3,120)
+        self.listSizer.Add(self.listCtrl,0,wx.EXPAND|wx.ALL)
+
+    def datePicker(self):
+        dateSizer = wx.BoxSizer(wx.HORIZONTAL)
+        date = wx.StaticText(self,label="Date",size=(65,19))
+        locale = wx.Locale(wx.LANGUAGE_ENGLISH_US)
+        self.datepicker = wx.adv.GenericDatePickerCtrl(self,wx.ID_ANY,style=wx.adv.DP_ALLOWNONE|wx.adv.DP_DROPDOWN,size=(275,23))
+        self.datepicker.SetValue(wx.DateTime())
+        dateSizer.Add(date,0,wx.ALL,4)
+        dateSizer.Add(self.datepicker,0,wx.ALL,5)
+        self.filterSizer.Add(dateSizer,1)
+
+    def refreshData(self,event):
+        bankcombo = self.bankCombo.GetStringSelection()
+        datepicker = self.datepicker.GetValue()
+        search = self.search.GetValue()
+        df = self.df.copy()
+        df = df[['transaction_id', 'description', 'amount', 'account_name','dateString']]
+        df['dateString'] = df['dateString'].astype('str')
+        if bankcombo !="":
+            df = df[df.account_name==bankcombo]
+        if datepicker.IsValid():
+            df = df[df.dateString == datepicker.Format("%Y-%m-%d")]
+        if search !="":
+            df2 = pd.DataFrame()
+            for i in range(len(df)):
+                listItems = list(map(str,df.iloc[i,:].to_list()))
+                if search.upper() in map(str.upper,listItems):
+                    df2 = df2.append([listItems])
+        self.listCtrl.DeleteAllItems()
+        if search!="":
+            df2.columns = ['transaction_id','description','amount','account_name','dateString'] 
+            self.loadData(df2)
+        else:
+            self.loadData(df)
+
+    def loadData(self,df):
+        self.listCtrl.DeleteAllItems()
+        df.reset_index(inplace=True)
+        for i in range(len(df)-1,-1,-1):
+            self.listCtrl.InsertItem(0,str(df.transaction_id[i]))
+            self.listCtrl.SetItem(0,1,str(df.dateString[i]))
+            self.listCtrl.SetItem(0,2,str(df.account_name[i]))
+            self.listCtrl.SetItem(0,3,str(df.description[i]))
+            self.listCtrl.SetItem(0,4,str(df.amount[i]))
+    
+    def removeData(self,event):
+        id = self.listCtrl.GetItem(self.listCtrl.GetFirstSelected()).GetText()
+        conn.execute("DELETE FROM transactions where id = {}".format(id))
+        self.getData()
+        self.clearFilters(event)
+        self.loadData(self.df)
+        wx.MessageBox("You have successfully removed the transaction!","Success!",wx.OK|wx.ICON_INFORMATION)
+
+    def saveData(self,event):
+        id = self.listCtrl.GetItem(self.listCtrl.GetFirstSelected(),0).GetText()
+        date = self.listCtrl.GetItem(self.listCtrl.GetFirstSelected(),1).GetText()
+        bank = self.listCtrl.GetItem(self.listCtrl.GetFirstSelected(),2).GetText()
+        description = self.listCtrl.GetItem(self.listCtrl.GetFirstSelected(),3).GetText()
+        amount = self.listCtrl.GetItem(self.listCtrl.GetFirstSelected(),4).GetText()
+        conn.execute('UPDATE transactions SET date = %s, description = %s,amount=%s WHERE ID =%s',(date,description,amount,id))
+        self.getData()
+        self.clearFilters(event)
+        self.loadData(self.df)
+        wx.MessageBox("You have successfully saved the transaction!","Success!",wx.OK|wx.ICON_INFORMATION)
+                     
+class EditableListCtrl(wx.ListCtrl,listmix.TextEditMixin):
+    def __init__(self,parent,id=wx.ID_ANY,pos=wx.DefaultPosition,size=wx.DefaultSize,style=0):
+        wx.ListCtrl.__init__(self,parent,id,pos,size,style)
+        listmix.TextEditMixin.__init__(self)
+        self.Bind(wx.EVT_LIST_BEGIN_LABEL_EDIT, self.OnBeginLabelEdit)
+
+    def OnBeginLabelEdit(self, event):
+        if event.GetColumn() ==2:
+            event.Veto()
+        else:
+            event.Skip()
+
 
 def main():
     app = wx.App()
