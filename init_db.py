@@ -9,7 +9,7 @@ import datetime
 
 Base = declarative_base()
 meta= MetaData()
-engine = create_engine('postgres://ryynqiogpfhfdv:6f049cb5190bcc742151a7f9dacbfd58dae81913f2f35f627e8fe5030cc4ecde@ec2-54-225-103-167.compute-1.amazonaws.com:5432/d9au2t8fb1nhng')
+engine = create_engine(config.uri)
 Session = sessionmaker(bind=engine)
 session = Session()
 
